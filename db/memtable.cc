@@ -10,14 +10,15 @@
 #include "util/coding.h"
 
 namespace leveldb {
-
+// TODO: GetLengthPrefixedSlice是干嘛的？
 static Slice GetLengthPrefixedSlice(const char* data) {
   uint32_t len;
   const char* p = data;
   p = GetVarint32Ptr(p, p + 5, &len);  // +5: we assume "p" is not corrupted
   return Slice(p, len);
 }
-
+// Memtable的四个核心，comparator做比较，arena做内存管理, refs做引用计数，table做底层实现（跳表）
+// TODO: 这里的疑惑点是为什么table已经使用了comparator_，外部还要再使用一次？
 MemTable::MemTable(const InternalKeyComparator& comparator)
     : comparator_(comparator), refs_(0), table_(comparator_, &arena_) {}
 
@@ -36,6 +37,8 @@ int MemTable::KeyComparator::operator()(const char* aptr,
 // Encode a suitable internal key target for "target" and return it.
 // Uses *scratch as scratch space, and the returned pointer will point
 // into this scratch space.
+// 编码key
+// TODO: 为什么要使用一个std::string* scratch？
 static const char* EncodeKey(std::string* scratch, const Slice& target) {
   scratch->clear();
   PutVarint32(scratch, target.size());

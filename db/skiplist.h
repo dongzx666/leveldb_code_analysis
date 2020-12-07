@@ -1,7 +1,12 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-
+// SkipList是由William Pugh发明。他在Communications of the ACM June 1990, 33(6) 668-676 发表了Skip lists: a probabilistic alternative to balanced trees
+/*
+TODO:
+1.C++中插入汇编语句。
+2.内存屏障
+ */
 #ifndef STORAGE_LEVELDB_DB_SKIPLIST_H_
 #define STORAGE_LEVELDB_DB_SKIPLIST_H_
 
@@ -193,39 +198,54 @@ struct SkipList<Key, Comparator>::Node {
   std::atomic<Node*> next_[1];
 };
 
+/*
+分配新结点。
+ */
 template <typename Key, class Comparator>
-// TODO: 下面这句如何解读
 typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
     const Key& key, int height) {
+  // 可以看出NewNode需要一个Node，大小为sizeof(Node), 还需要一个Next数组，大小为sizeof(std::atomic<Node*>) * (height - 1))，至于为什么是height-1? 推测是因为之前next数组已经有一个大小。
+  // TODO：c语言申请内存知识点
   char* const node_memory = arena_->AllocateAligned(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
   return new (node_memory) Node(key);
 }
 
+/*
+迭代器
+ */
 template <typename Key, class Comparator>
 inline SkipList<Key, Comparator>::Iterator::Iterator(const SkipList* list) {
   list_ = list;
   node_ = nullptr;
 }
-
+/*
+是否合法，用于迭代器判断
+ */
 template <typename Key, class Comparator>
 inline bool SkipList<Key, Comparator>::Iterator::Valid() const {
   return node_ != nullptr;
 }
-
+/*
+返回key, 用于迭代器迭代
+ */
 template <typename Key, class Comparator>
 inline const Key& SkipList<Key, Comparator>::Iterator::key() const {
   assert(Valid());
   return node_->key;
 }
-
+/*
+返回next, 用于迭代器迭代
+ */
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::Next() {
   assert(Valid());
-  // TODO: next传0是？
+  // 跳表中每个结点的next数组的第零项都是下一个结点
   node_ = node_->Next(0);
 }
-
+/*
+返回prev, 用于迭代器迭代
+ */
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::Prev() {
   // Instead of using explicit "prev" links, we just search for the
@@ -237,17 +257,23 @@ inline void SkipList<Key, Comparator>::Iterator::Prev() {
     node_ = nullptr;
   }
 }
-
+/*
+搜寻key，用于迭代器迭代
+ */
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::Seek(const Key& target) {
   node_ = list_->FindGreaterOrEqual(target, nullptr);
 }
-
+/*
+返回跳表的第一项，用于迭代器
+ */
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::SeekToFirst() {
   node_ = list_->head_->Next(0);
 }
-
+/*
+返回跳表的最后一项，用于迭代器
+ */
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::SeekToLast() {
   node_ = list_->FindLast();
@@ -255,9 +281,8 @@ inline void SkipList<Key, Comparator>::Iterator::SeekToLast() {
     node_ = nullptr;
   }
 }
-
-template <typename Key, class Comparator>
 // 生成随机高度，供结点使用
+template <typename Key, class Comparator>
 int SkipList<Key, Comparator>::RandomHeight() {
   // Increase height with probability 1 in kBranching
   static const unsigned int kBranching = 4;
@@ -269,7 +294,9 @@ int SkipList<Key, Comparator>::RandomHeight() {
   assert(height <= kMaxHeight);
   return height;
 }
-
+/*
+判断key是否在指定node之后
+ */
 template <typename Key, class Comparator>
 bool SkipList<Key, Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
   // null n is considered infinite
@@ -309,6 +336,7 @@ SkipList<Key, Comparator>::FindLessThan(const Key& key) const {
   Node* x = head_;
   int level = GetMaxHeight() - 1;
   while (true) {
+    // TODO: 这里为什么要用断言？
     assert(x == head_ || compare_(x->key, key) < 0);
     Node* next = x->Next(level);
     if (next == nullptr || compare_(next->key, key) >= 0) {
@@ -344,6 +372,9 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::FindLast()
   }
 }
 
+/*
+初始化SkipList
+ */
 template <typename Key, class Comparator>
 SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
     : compare_(cmp),
@@ -356,6 +387,9 @@ SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
   }
 }
 
+/*
+插入操作。首先找到插入点，同时由于保存了prev数组，所以直接可以修改其他结点对应insert结点的信息。最后修改自己的next数组。
+ */
 template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
@@ -385,14 +419,19 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
   for (int i = 0; i < height; i++) {
     // NoBarrier_SetNext() suffices since we will add a barrier when
     // we publish a pointer to "x" in prev[i].
+    // TODO: NoBarrier_SetNext?
     x->NoBarrier_SetNext(i, prev[i]->NoBarrier_Next(i));
     prev[i]->SetNext(i, x);
   }
 }
 
+/*
+包含操作。找到大于等于key的点，再判断是否equal。
+ */
 template <typename Key, class Comparator>
 bool SkipList<Key, Comparator>::Contains(const Key& key) const {
   Node* x = FindGreaterOrEqual(key, nullptr);
+  // 判断很严谨，考虑了空指针的情况。
   if (x != nullptr && Equal(key, x->key)) {
     return true;
   } else {
