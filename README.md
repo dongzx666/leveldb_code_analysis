@@ -6,6 +6,8 @@
 
 ## 日志
 
+2020-12-8：db/memtable.h&.cc(部分)，以及db/dbformat.h&.cc(部分)
+
 2020-12-7: db/skiplist.h(基本完)，以及db/memtable.h&.cc(部分)
 
 2020-12-3: db/skiplist.h(未完)

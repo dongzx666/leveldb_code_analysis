@@ -75,7 +75,7 @@ class MemTableIterator : public Iterator {
 };
 
 Iterator* MemTable::NewIterator() { return new MemTableIterator(&table_); }
-
+// add方法的前置知识：SequenceNumber，ValueType
 void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
                    const Slice& value) {
   // Format of an entry is concatenation of:
@@ -85,22 +85,32 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
   size_t val_size = value.size();
+  // 多出来的8个字节用来存储序列号和值类型
   size_t internal_key_size = key_size + 8;
+  // 存储空间大小，主要有key的长度, key的内容, value的长度, value的内容
   const size_t encoded_len = VarintLength(internal_key_size) +
                              internal_key_size + VarintLength(val_size) +
                              val_size;
+  // 分配存储的buffer
   char* buf = arena_.Allocate(encoded_len);
+  // 将key的长度编码
   char* p = EncodeVarint32(buf, internal_key_size);
+  // 拷贝key的内容
   std::memcpy(p, key.data(), key_size);
   p += key_size;
+  // 将序列号和值类型写入
   EncodeFixed64(p, (s << 8) | type);
+  // 指针后移
   p += 8;
+  // 将value的长度编码
   p = EncodeVarint32(p, val_size);
+  // 拷贝value的内容
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
+  // 将组装的内容插入到跳表中
   table_.Insert(buf);
 }
-
+// get方法的前置知识：LookupKey
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();
   Table::Iterator iter(&table_);

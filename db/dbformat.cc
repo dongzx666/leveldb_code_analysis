@@ -12,6 +12,7 @@
 
 namespace leveldb {
 
+// 将序列号和值类型打包成8字节
 static uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(t <= kValueTypeForSeek);
@@ -115,8 +116,11 @@ bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
 }
 
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
+  // 用户键大小
   size_t usize = user_key.size();
+  // 还需要8个字节的序列号和5字节的内部键长度
   size_t needed = usize + 13;  // A conservative estimate
+  // 判断大小，够用就直接使用space_，否则重新申请内存
   char* dst;
   if (needed <= sizeof(space_)) {
     dst = space_;
@@ -124,6 +128,7 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
     dst = new char[needed];
   }
   start_ = dst;
+  // LookupKey内容大小
   dst = EncodeVarint32(dst, usize + 8);
   kstart_ = dst;
   std::memcpy(dst, user_key.data(), usize);
@@ -131,6 +136,7 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
   dst += 8;
   end_ = dst;
+  // 整体结构: [LookupKey内容大小][用户键][序列号<<8|值类型]
 }
 
 }  // namespace leveldb

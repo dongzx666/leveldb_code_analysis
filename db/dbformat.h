@@ -51,6 +51,7 @@ class InternalKey;
 // Value types encoded as the last component of internal keys.
 // DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk
 // data structures.
+// 值的类型，一共两种，一种删除，一种数据。
 enum ValueType { kTypeDeletion = 0x0, kTypeValue = 0x1 };
 // kValueTypeForSeek defines the ValueType that should be passed when
 // constructing a ParsedInternalKey object for seeking to a particular
@@ -58,8 +59,9 @@ enum ValueType { kTypeDeletion = 0x0, kTypeValue = 0x1 };
 // and the value type is embedded as the low 8 bits in the sequence
 // number in internal keys, we need to use the highest-numbered
 // ValueType, not the lowest).
+// 查找时的值类型只能是数据。
 static const ValueType kValueTypeForSeek = kTypeValue;
-
+// 序列号是一个64位的int
 typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
@@ -131,17 +133,22 @@ class InternalFilterPolicy : public FilterPolicy {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
+// 包装内部key
+// 内部键格式是在用户指定的键(Slice)基础上追加了按照小端方式存储的(顺序号<<8+值类型)，即便是用std::string类型存储的，但是已经不再是纯粹的字符串了。
 class InternalKey {
  private:
   std::string rep_;
 
  public:
   InternalKey() {}  // Leave rep_ as empty to indicate it is invalid
+  // 构造函数，参数有key的slice, 序列号，值类型。
   InternalKey(const Slice& user_key, SequenceNumber s, ValueType t) {
+    // TODO: 最终的内部键的格式为:[Slice]+[littleendian(SequenceNumber<<8 + ValueType)]?
     AppendInternalKey(&rep_, ParsedInternalKey(user_key, s, t));
   }
-
+  // TODO: 此处slice是InternalKey.Encode，不是user_key
   bool DecodeFrom(const Slice& s) {
+    // assign: 清空并赋值
     rep_.assign(s.data(), s.size());
     return !rep_.empty();
   }
@@ -181,6 +188,7 @@ inline bool ParseInternalKey(const Slice& internal_key,
 }
 
 // A helper class useful for DBImpl::Get()
+// 用于在指定序列号的快照中寻找用户key
 class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
@@ -193,15 +201,19 @@ class LookupKey {
   ~LookupKey();
 
   // Return a key suitable for lookup in a MemTable.
+  // 返回适合在MemTable中查找的键
   Slice memtable_key() const { return Slice(start_, end_ - start_); }
 
   // Return an internal key (suitable for passing to an internal iterator)
+  // 返回内部键
   Slice internal_key() const { return Slice(kstart_, end_ - kstart_); }
 
   // Return the user key
+  // 返回用户键
   Slice user_key() const { return Slice(kstart_, end_ - kstart_ - 8); }
 
  private:
+  // 从下可看出LookupKey的存储顺序是，key的长度，用户key，tag是序列号和值类型的打包体
   // We construct a char array of the form:
   //    klength  varint32               <-- start_
   //    userkey  char[klength]          <-- kstart_
@@ -209,13 +221,18 @@ class LookupKey {
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
+  // LookupKey起始地址
   const char* start_;
+  // 用户key的起始地址
   const char* kstart_;
+  // LookupKey结束地址
   const char* end_;
+  // 200字节大小的固定内部空间，避免频繁的申请内存
   char space_[200];  // Avoid allocation for short keys
 };
 
 inline LookupKey::~LookupKey() {
+  // 如果新申请的内存，就需要释放内存
   if (start_ != space_) delete[] start_;
 }
 
