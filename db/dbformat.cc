@@ -45,15 +45,20 @@ const char* InternalKeyComparator::Name() const {
   return "leveldb.InternalKeyComparator";
 }
 
+// 在用户提供的键之上追加了序列号，所以比较的时候略有不同
 int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   // Order by:
   //    increasing user key (according to user-supplied comparator)
   //    decreasing sequence number
   //    decreasing type (though sequence# should be enough to disambiguate)
+  // 先单纯比较user_key的大小
   int r = user_comparator_->Compare(ExtractUserKey(akey), ExtractUserKey(bkey));
+  // 键相等，意味着遇到了删除或者修改操作，需要再比较一下序列号。
   if (r == 0) {
+    // 解码序列号
     const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
     const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+    // 序列号越大，说明插入时间越晚，数据就越新，如果排序的话应该排在前面?
     if (anum > bnum) {
       r = -1;
     } else if (anum < bnum) {

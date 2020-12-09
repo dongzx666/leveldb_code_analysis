@@ -101,8 +101,10 @@ inline Slice ExtractUserKey(const Slice& internal_key) {
 
 // A comparator for internal keys that uses a specified comparator for
 // the user key portion and breaks ties by decreasing sequence number.
+// InternalKeyComparator的主要功能还是通过BytewiseComparatorImpl实现，只是在BytewiseComparatorImpl基础上做了一点扩展。
 class InternalKeyComparator : public Comparator {
  private:
+  // 用户比较器
   const Comparator* user_comparator_;
 
  public:
@@ -224,6 +226,7 @@ class LookupKey {
   // LookupKey起始地址
   const char* start_;
   // 用户key的起始地址
+  // 由于LookupKey的size是变长存储的，因此它使用kstart_记录了user key string的起始地址，否则将不能正确的获取size和user key；
   const char* kstart_;
   // LookupKey结束地址
   const char* end_;

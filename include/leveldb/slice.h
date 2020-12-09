@@ -43,7 +43,7 @@ class LEVELDB_EXPORT Slice {
 
   // Intentionally copyable.
   Slice(const Slice&) = default;
-  // TODO: 如何理解下一句
+  // 重载等号赋值。
   Slice& operator=(const Slice&) = default;
 
   // Return a pointer to the beginning of the referenced data
