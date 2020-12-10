@@ -45,7 +45,7 @@ static const char* EncodeKey(std::string* scratch, const Slice& target) {
   scratch->append(target.data(), target.size());
   return scratch->data();
 }
-
+// MemTable中存储的key是InternalKey，value是用户指定的值
 class MemTableIterator : public Iterator {
  public:
   explicit MemTableIterator(MemTable::Table* table) : iter_(table) {}
@@ -61,16 +61,20 @@ class MemTableIterator : public Iterator {
   void SeekToLast() override { iter_.SeekToLast(); }
   void Next() override { iter_.Next(); }
   void Prev() override { iter_.Prev(); }
+  // TODO: 原来GetLengthPrefixedSlice用在这里，用于获取memtable的key
   Slice key() const override { return GetLengthPrefixedSlice(iter_.key()); }
   Slice value() const override {
+    // 在内存中跳过键的部分后面就是值
     Slice key_slice = GetLengthPrefixedSlice(iter_.key());
     return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
   }
-
+  // TODO: 永远返回正确???
   Status status() const override { return Status::OK(); }
 
  private:
+  // 用到的迭代器就是SkipList::Iterator
   MemTable::Table::Iterator iter_;
+  // 由于SkipList的键是const char*，所以需要一个临时缓存做类型转换
   std::string tmp_;  // For passing to EncodeKey
 };
 
@@ -112,6 +116,7 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
 }
 // get方法的前置知识：LookupKey
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
+  // 根据传入的LookupmKey得到在emtable中存储的key, 然后调用Skip list::Iterator的Seek函数查找
   Slice memkey = key.memtable_key();
   Table::Iterator iter(&table_);
   iter.Seek(memkey.data());
@@ -128,16 +133,21 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     const char* entry = iter.key();
     uint32_t key_length;
     const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);
+    // 比较user_key是否相同
+    // TODO: comparator_.comparator.user_comparator()->Compare()
     if (comparator_.comparator.user_comparator()->Compare(
             Slice(key_ptr, key_length - 8), key.user_key()) == 0) {
       // Correct user key
       const uint64_t tag = DecodeFixed64(key_ptr + key_length - 8);
+      // TODO: static_cast<ValueType>(tag & 0xff)
       switch (static_cast<ValueType>(tag & 0xff)) {
+        // 找到并且是真实数据
         case kTypeValue: {
           Slice v = GetLengthPrefixedSlice(key_ptr + key_length);
           value->assign(v.data(), v.size());
           return true;
         }
+        // 找到但是为删除标记
         case kTypeDeletion:
           *s = Status::NotFound(Slice());
           return true;

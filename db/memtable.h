@@ -1,6 +1,12 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
+/*
+memtable本质上就是一个有序的Skip list，排序基于user key的sequence number。排序比较的次序依次是:
+1. 首先根据user key按升序排列
+2. 然后根据sequence number按降序排列
+3. 最后根据value type按降序排列（这个其实无关紧要）
+ */
 
 #ifndef STORAGE_LEVELDB_DB_MEMTABLE_H_
 #define STORAGE_LEVELDB_DB_MEMTABLE_H_
