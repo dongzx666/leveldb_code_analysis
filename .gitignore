@@ -8,3 +8,6 @@
 build/
 out/
 cmake-build-debug/
+
+# other
+leveldb_code_analysis.udb

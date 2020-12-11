@@ -12,6 +12,7 @@ Each block consists of a sequence of records:
       type: uint8          // One of FULL, FIRST, MIDDLE, LAST
       data: uint8[length]
 
+
 A record never starts within the last six bytes of a block (since it won't fit).
 Any leftover bytes here form the trailer, which must consist entirely of zero
 bytes and must be skipped by readers.
