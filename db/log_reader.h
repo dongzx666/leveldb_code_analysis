@@ -12,7 +12,7 @@
 #include "leveldb/status.h"
 
 namespace leveldb {
-
+// log文件读取类SequentialFile
 class SequentialFile;
 
 namespace log {
@@ -20,6 +20,7 @@ namespace log {
 class Reader {
  public:
   // Interface for reporting errors.
+  // reporter用于汇报错误
   class Reporter {
    public:
     virtual ~Reporter();
@@ -90,14 +91,18 @@ class Reader {
   bool const checksum_;
   char* const backing_store_;
   Slice buffer_;
+  // 是否到了文件末尾
   bool eof_;  // Last Read() indicated EOF by returning < kBlockSize
 
   // Offset of the last record returned by ReadRecord.
+  // 上一条记录的偏移量。
   uint64_t last_record_offset_;
   // Offset of the first location past the end of buffer_.
+  // 当前的读取偏移
   uint64_t end_of_buffer_offset_;
 
   // Offset at which to start looking for the first record to return
+  // 初始偏移，也就是第一条
   uint64_t const initial_offset_;
 
   // True if we are resynchronizing after a seek (initial_offset_ > 0). In

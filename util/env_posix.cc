@@ -432,7 +432,9 @@ class PosixWritableFile final : public WritableFile {
   int fd_;
 
   const bool is_manifest_;  // True if the file's name starts with MANIFEST.
+  // 文件名
   const std::string filename_;
+  // 文件夹名
   const std::string dirname_;  // The directory of filename_.
 };
 

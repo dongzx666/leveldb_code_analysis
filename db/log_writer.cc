@@ -13,6 +13,7 @@
 namespace leveldb {
 namespace log {
 
+// 初始化type_crc_，构造函数调用
 static void InitTypeCrc(uint32_t* type_crc) {
   for (int i = 0; i <= kMaxRecordType; i++) {
     char t = static_cast<char>(i);
@@ -38,29 +39,37 @@ Status Writer::AddRecord(const Slice& slice) {
   // Fragment the record if necessary and emit it.  Note that if slice
   // is empty, we still want to iterate once to emit a single
   // zero-length record
+  // 如有必要，将记录分片并发出。请注意，如果slice为空，我们仍然希望迭代一次，以发出一条长度为零的记录
   Status s;
   bool begin = true;
+  // 循环写入slice内容
   do {
     const int leftover = kBlockSize - block_offset_;
     assert(leftover >= 0);
     if (leftover < kHeaderSize) {
       // Switch to a new block
       if (leftover > 0) {
+        // 如果当前块大小，大于0小于7，则只能用0全部填充
         // Fill the trailer (literal below relies on kHeaderSize being 7)
+        // TODO: 下一行?
         static_assert(kHeaderSize == 7, "");
         dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover));
       }
+      // 此块已用完, 重置块偏移
       block_offset_ = 0;
     }
 
     // Invariant: we never leave < kHeaderSize bytes in a block.
     assert(kBlockSize - block_offset_ - kHeaderSize >= 0);
-
+    // 可以给数据用的空间大小
     const size_t avail = kBlockSize - block_offset_ - kHeaderSize;
+    // 分片大小（实际内存使用的大小）
     const size_t fragment_length = (left < avail) ? left : avail;
 
     RecordType type;
+    // 结束的标志是分片大小等于数据的大小
     const bool end = (left == fragment_length);
+    // 判断record类型
     if (begin && end) {
       type = kFullType;
     } else if (begin) {
@@ -70,15 +79,18 @@ Status Writer::AddRecord(const Slice& slice) {
     } else {
       type = kMiddleType;
     }
-
+    // 实际写入
     s = EmitPhysicalRecord(type, ptr, fragment_length);
+    // 更新指针
     ptr += fragment_length;
+    // 更新剩余数据大小
     left -= fragment_length;
+    // 更新begin标记
     begin = false;
   } while (s.ok() && left > 0);
   return s;
 }
-
+// 实际写入函数，ptr为record数据，length为record长度
 Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
                                   size_t length) {
   assert(length <= 0xffff);  // Must fit in two bytes
@@ -86,16 +98,21 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
 
   // Format the header
   char buf[kHeaderSize];
+  // 4和5记录长度
   buf[4] = static_cast<char>(length & 0xff);
   buf[5] = static_cast<char>(length >> 8);
+  // 6记录类型
   buf[6] = static_cast<char>(t);
 
   // Compute the crc of the record type and the payload.
+  // 计算record类型和载荷的校验值
   uint32_t crc = crc32c::Extend(type_crc_[t], ptr, length);
+  // TODO: 调整空间?
   crc = crc32c::Mask(crc);  // Adjust for storage
   EncodeFixed32(buf, crc);
 
   // Write the header and the payload
+  // 写入头部（6+2+1）和载荷（实际数据），每次写入后要判断是否成功才能继续写入
   Status s = dest_->Append(Slice(buf, kHeaderSize));
   if (s.ok()) {
     s = dest_->Append(Slice(ptr, length));
@@ -103,6 +120,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
       s = dest_->Flush();
     }
   }
+  // 调整偏移
   block_offset_ += kHeaderSize + length;
   return s;
 }
