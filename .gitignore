@@ -5,9 +5,11 @@
 .DS_Store
 
 # Build directory.
+Debug/
 build/
 out/
 cmake-build-debug/
+third_party/
 
 # other
 leveldb_code_analysis.udb
